@@ -260,23 +260,20 @@ body {
   background: #6b7280;
 }
 
-/* Сброс дефолтных стилей leaflet.markercluster — они ломали наш «донат»
-   (навязывали 30px, скругления, фон и line-height числу). */
-.marker-cluster,
-.marker-cluster div,
-.marker-cluster span {
+/* MapLibre-маркеры — контейнер без своих отступов/фона, чтобы наш SVG-кружок
+   рисовался «как есть». */
+.maplibregl-marker {
   background: transparent !important;
   border: none !important;
-  width: auto !important;
-  height: auto !important;
-  margin: 0 !important;
-  border-radius: 0 !important;
-  line-height: normal !important;
-  box-shadow: none !important;
 }
-.leaflet-div-icon {
-  background: transparent !important;
-  border: none !important;
+/* Маркер «вы здесь» */
+.me-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2ea043;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 4px rgba(46, 160, 67, 0.35);
 }
 
 .cluster-pin {
@@ -720,10 +717,10 @@ body {
   line-height: 1;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
-.leaflet-marker-icon {
+.maplibregl-marker {
   transition: transform 0.12s ease;
 }
-.leaflet-marker-icon:hover {
+.maplibregl-marker:hover {
   transform: scale(1.12);
   z-index: 1000 !important;
 }

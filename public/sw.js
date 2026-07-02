@@ -3,7 +3,7 @@
 // - принимает и показывает push-уведомления
 'use strict';
 
-const CACHE = 'gz-shell-v3';
+const CACHE = 'gz-shell-v4';
 
 const SHELL = [
   '/',
@@ -13,11 +13,9 @@ const SHELL = [
   '/manifest.webmanifest',
   '/icons/icon.svg',
 
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-  'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
-  'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css',
-  'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
+  // Карта: MapLibre GL JS (открытый, без API-ключей)
+  'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css',
+  'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js',
 ];
 
 self.addEventListener('install', (e) => {

@@ -23,8 +23,7 @@ const BRAND_ICON = {
 // Состояние приложения
 const state = {
   map: null,
-  cluster: null,
-  markers: {},
+  domMarkers: {}, // ключ (cluster:<id> | pt:<id>) -> maplibregl.Marker
   stations: [],
 
   cities: [],
@@ -34,6 +33,7 @@ const state = {
   meta: { statuses: [], fuels: [], queues: [] },
   reportForm: { status: 'yes', fuels: [], queue: null },
   userPos: null,
+  userMarker: null,
 };
 
 // Утилиты
@@ -106,26 +106,70 @@ function confidenceHtml(s) {
 async function init() {
   state.meta = await api('/api/meta');
 
-  // Карта
-  state.map = L.map('map', { zoomControl: true }).setView([55.75, 37.61], 11);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '© OpenStreetMap',
-  }).addTo(state.map);
-
-  // Кластеризация маркеров: облачка с числом АЗС и цветом по преобладающему статусу
-  state.cluster = L.markerClusterGroup({
-    maxClusterRadius: 55,
-    spiderfyOnMaxZoom: true,
-    showCoverageOnHover: false,
-    chunkedLoading: true,
-    iconCreateFunction: clusterIcon,
+  // Карта на MapLibre GL JS (открытый, без API-ключей). Стиль — тёмный
+  // растровый слой из бесплатного OpenStreetMap.
+  state.map = new maplibregl.Map({
+    container: 'map',
+    style: {
+      version: 8,
+      sources: {
+        osm: {
+          type: 'raster',
+          tiles: [
+            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          ],
+          tileSize: 256,
+          attribution: '© OpenStreetMap',
+        },
+      },
+      layers: [
+        { id: 'bg', type: 'background', paint: { 'background-color': '#0a0e14' } },
+        {
+          id: 'osm',
+          type: 'raster',
+          source: 'osm',
+          paint: { 'raster-brightness-max': 0.85, 'raster-saturation': -0.2 },
+        },
+      ],
+    },
+    center: [37.61, 55.75], // MapLibre: [lng, lat]
+    zoom: 10,
+    attributionControl: true,
   });
-  state.map.addLayer(state.cluster);
+  state.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
-  // Догрузка станций по видимой области карты (как на gdezapravka.ru): при
-  // панорамировании/зуме подтягиваем АЗС внутри bbox — станции есть везде,
-  // а не только в 10 «городах». Запрос дебаунсится, чтобы не спамить сервер.
+  await new Promise((res) => state.map.on('load', res));
+
+  // Источник GeoJSON с кластеризацией. clusterProperties считает, сколько в
+  // кластере АЗС каждого статуса — из этого строим кольцо-донат.
+  state.map.addSource('stations', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+    cluster: true,
+    clusterRadius: 55,
+    clusterMaxZoom: 15,
+    clusterProperties: {
+      yes: ['+', ['case', ['==', ['get', 'status'], 'yes'], 1, 0]],
+      limit: ['+', ['case', ['==', ['get', 'status'], 'limit'], 1, 0]],
+      no: ['+', ['case', ['==', ['get', 'status'], 'no'], 1, 0]],
+      unknown: ['+', ['case', ['==', ['get', 'status'], 'unknown'], 1, 0]],
+    },
+  });
+  // Невидимый слой-«якорь» — нужен, чтобы querySourceFeatures/queryRendered
+  // отдавал точки/кластеры. Сами кружки рисуем HTML-маркерами поверх.
+  state.map.addLayer({
+    id: 'stations-hit',
+    type: 'circle',
+    source: 'stations',
+    paint: { 'circle-radius': 1, 'circle-opacity': 0 },
+  });
+
+  // Перерисовка HTML-маркеров при любом движении/зуме карты
+  state.map.on('move', syncDomMarkers);
+  state.map.on('moveend', syncDomMarkers);
+  // Догрузка станций по видимой области (bbox), с дебаунсом
   state.map.on('moveend', debounce(loadStationsInView, 350));
 
   // Города
@@ -168,7 +212,7 @@ async function selectCity(city) {
   $('#citySelect').value = city;
   const c = state.cities.find((x) => x.city === city);
   if (c)
-    state.map.setView([c.lat, c.lng], 12); // вызовет moveend → loadStationsInView
+    state.map.flyTo({ center: [c.lng, c.lat], zoom: 12 }); // moveend → loadStationsInView
   else await loadStationsInView();
 }
 
@@ -272,11 +316,10 @@ function fuelGlyph(px) {
       stroke-linecap="round" stroke-linejoin="round">${FUEL_PATHS}</g>`;
 }
 
-// ---------- Маркеры на карте ----------
-// Одиночная АЗС — «кругляшок» в стиле аналога: тёмный круг + сплошное кольцо
-// в цвете статуса + иконка колонки в центре. Всё рисуем внутри одного SVG,
-// чтобы никакие внешние стили не могли «съесть» содержимое.
-function markerIcon(status) {
+// ---------- Маркеры на карте (MapLibre) ----------
+// Одиночная АЗС — «кругляшок»: тёмный круг + сплошное кольцо в цвете статуса
+// + иконка колонки в центре. Возвращаем HTML-строку для maplibregl.Marker.
+function markerHtml(status) {
   const st = status || 'unknown';
   const size = 36;
   const cxy = size / 2;
@@ -285,7 +328,7 @@ function markerIcon(status) {
   const color = STATUS_COLOR[st];
   const gpx = 18; // размер глифа
   const go = (size - gpx) / 2; // смещение для центрирования глифа
-  const html = `
+  return `
     <div class="dot" style="width:${size}px;height:${size}px">
       <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
         <circle cx="${cxy}" cy="${cxy}" r="${r}" fill="#171d29" stroke="#0b0e14" stroke-width="1"/>
@@ -293,27 +336,13 @@ function markerIcon(status) {
         <g transform="translate(${go} ${go})">${fuelGlyph(gpx)}</g>
       </svg>
     </div>`;
-  return L.divIcon({
-    className: '',
-    html,
-    iconSize: [size, size],
-    iconAnchor: [cxy, cxy],
-    popupAnchor: [0, -cxy],
-  });
 }
 
-// Иконка кластера — «кругляшок» как на gdezapravka.ru: тёмный круг с числом
-// АЗС в центре и кольцом-донатом, сегменты которого показывают доли статусов
-// (зелёный — есть, красный — нет, жёлтый — лимит, серый — нет данных).
-function clusterIcon(cluster) {
-  const markers = cluster.getAllChildMarkers();
-  const count = cluster.getChildCount();
-  const tally = { yes: 0, limit: 0, no: 0, unknown: 0 };
-  markers.forEach((m) => {
-    tally[m.options.stStatus || 'unknown']++;
-  });
-
+// Кластер — «кругляшок» с числом АЗС в центре и кольцом-донатом (доли статусов).
+// tally = { yes, limit, no, unknown }, count = сумма.
+function clusterHtml(count, tally) {
   const size = count < 10 ? 42 : count < 50 ? 52 : count < 200 ? 62 : 72;
+
   const cxy = size / 2;
   const sw = size < 50 ? 6 : 8; // толщина цветного кольца
   const r = cxy - sw / 2 - 2; // радиус, по которому идёт кольцо (у самого края)
@@ -354,26 +383,93 @@ function clusterIcon(cluster) {
           font-family="-apple-system,Segoe UI,Roboto,Arial,sans-serif">${count}</text>
       </svg>
     </div>`;
-
-  return L.divIcon({ html, className: '', iconSize: [size, size] });
+  return html;
 }
 
+// renderMarkers — грузим отфильтрованные АЗС в GeoJSON-источник. Кластеризацию
+// делает сам MapLibre; HTML-кружки расставит syncDomMarkers.
 function renderMarkers() {
-  // Очищаем кластер-слой
-  state.cluster.clearLayers();
-  state.markers = {};
+  const src = state.map.getSource('stations');
+  if (!src) return;
+  const features = filteredStations().map((s) => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
+    properties: { id: s.id, status: s.status || 'unknown' },
+  }));
+  src.setData({ type: 'FeatureCollection', features });
+  // setData асинхронно — маркеры перерисуем после idle и сразу (на всякий случай)
+  syncDomMarkers();
+  state.map.once('idle', syncDomMarkers);
+}
 
-  const batch = [];
-  filteredStations().forEach((s) => {
-    const m = L.marker([s.lat, s.lng], {
-      icon: markerIcon(s.status),
-      stStatus: s.status || 'unknown',
-    });
-    m.on('click', () => openDetail(s.id));
-    state.markers[s.id] = m;
-    batch.push(m);
-  });
-  state.cluster.addLayers(batch);
+// syncDomMarkers — синхронизирует HTML-маркеры (кружки-кластеры и одиночные
+// точки) с тем, что сейчас отрендерил источник. Создаём новые, переиспользуем
+// существующие, удаляем ушедшие из вида — без миганий.
+function syncDomMarkers() {
+  const src = state.map.getSource('stations');
+  if (!src) return;
+  let feats;
+  try {
+    feats = state.map.querySourceFeatures('stations');
+  } catch (e) {
+    return;
+  }
+
+  const seen = {};
+  for (const f of feats) {
+    const [lng, lat] = f.geometry.coordinates;
+    let key, html, onClick;
+
+    if (f.properties.cluster) {
+      key = 'cl:' + f.properties.cluster_id;
+      const count = f.properties.point_count;
+      const tally = {
+        yes: f.properties.yes || 0,
+        limit: f.properties.limit || 0,
+        no: f.properties.no || 0,
+        unknown: f.properties.unknown || 0,
+      };
+      html = clusterHtml(count, tally);
+      const clId = f.properties.cluster_id;
+      onClick = () => {
+        src.getClusterExpansionZoom(clId, (err, zoom) => {
+          if (err) return;
+          state.map.easeTo({ center: [lng, lat], zoom });
+        });
+      };
+    } else {
+      key = 'pt:' + f.properties.id;
+      html = markerHtml(f.properties.status);
+      const sid = f.properties.id;
+      onClick = () => openDetail(sid);
+    }
+
+    if (seen[key]) continue; // querySourceFeatures может вернуть дубли
+    seen[key] = true;
+
+    let marker = state.domMarkers[key];
+    if (!marker) {
+      const div = document.createElement('div');
+      div.innerHTML = html;
+      div.style.cursor = 'pointer';
+      div.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onClick();
+      });
+      marker = new maplibregl.Marker({ element: div }).setLngLat([lng, lat]).addTo(state.map);
+      state.domMarkers[key] = marker;
+    } else {
+      marker.setLngLat([lng, lat]);
+    }
+  }
+
+  // Удаляем маркеры, которых больше нет в видимой области
+  for (const key of Object.keys(state.domMarkers)) {
+    if (!seen[key]) {
+      state.domMarkers[key].remove();
+      delete state.domMarkers[key];
+    }
+  }
 }
 
 // ---------- Геолокация ----------
@@ -382,13 +478,19 @@ function locateUser() {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       state.userPos = [pos.coords.latitude, pos.coords.longitude];
-      state.map.setView(state.userPos, 13);
-      L.circleMarker(state.userPos, { radius: 8, color: '#2ea043', fillOpacity: 0.9 })
-        .addTo(state.map)
-        .bindPopup('Вы здесь');
+      const [lat, lng] = state.userPos;
+      state.map.flyTo({ center: [lng, lat], zoom: 13 });
+      // Маркер «вы здесь»
+      if (state.userMarker) state.userMarker.remove();
+      const dot = document.createElement('div');
+      dot.className = 'me-dot';
+      state.userMarker = new maplibregl.Marker({ element: dot })
+        .setLngLat([lng, lat])
+        .addTo(state.map);
       // Пересортировать список по расстоянию
-      selectCity(state.currentCity);
+      loadStationsInView();
     },
+
     () => alert('Не удалось определить местоположение')
   );
 }
@@ -472,7 +574,7 @@ async function openDetail(id) {
   `;
 
   panel.classList.remove('hidden');
-  if (state.markers[id]) state.map.panTo([s.lat, s.lng]);
+  if (s.lat != null && s.lng != null) state.map.panTo([s.lng, s.lat]);
 
   $('#detailClose').addEventListener('click', () => panel.classList.add('hidden'));
   $('#openReport').addEventListener('click', () => openReport(s));
