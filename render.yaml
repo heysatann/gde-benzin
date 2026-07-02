@@ -1,0 +1,21 @@
+# Конфиг для деплоя на Render.com (бесплатный тариф).
+# Render сам прочитает этот файл при создании Blueprint из репозитория.
+services:
+  - type: web
+    name: gde-zapravka
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.1
+      # База SQLite будет лежать на постоянном диске /data (см. disk ниже)
+      - key: DATA_DIR
+        value: /data
+
+    # Постоянный диск, чтобы база SQLite (data.db) не терялась при рестарте.
+    disk:
+      name: gz-data
+      mountPath: /data
+      sizeGB: 1

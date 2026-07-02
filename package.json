@@ -1,0 +1,19 @@
+{
+  "name": "gde-zapravka",
+  "version": "1.0.0",
+  "description": "Сервис-карта заправочных станций России с отметками о наличии топлива, очереди и ценах",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "express": "^4.19.2",
+    "web-push": "^3.6.7"
+  }
+}

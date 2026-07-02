@@ -1,0 +1,21 @@
+{
+  "name": "ГдеЗаправка — карта АЗС России",
+  "short_name": "ГдеЗаправка",
+  "description": "Карта заправок России: наличие топлива, цены и очереди в реальном времени от водителей.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "lang": "ru",
+  "categories": ["navigation", "utilities", "travel"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

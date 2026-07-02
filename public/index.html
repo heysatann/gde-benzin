@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>ГдеЗаправка — карта АЗС России</title>
+    <meta name="theme-color" content="#0d1117" />
+    <meta
+      name="description"
+      content="Карта заправок России: наличие топлива, цены и очереди в реальном времени от водителей."
+    />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/icon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ГдеЗаправка" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Боковая панель -->
+      <aside id="sidebar">
+        <header class="topbar">
+          <div class="logo">
+            <span class="logo-mark">⛽</span>
+            <span class="logo-text">
+              Где
+              <b>Заправка</b>
+            </span>
+          </div>
+          <div class="city-select">
+            <select id="citySelect"></select>
+          </div>
+        </header>
+
+        <div class="filters">
+          <button class="chip active" data-filter="all">Все</button>
+          <button class="chip" data-filter="yes">Есть</button>
+          <button class="chip" data-filter="limit">Лимит</button>
+          <button class="chip" data-filter="no">Нет</button>
+        </div>
+
+        <div class="list-header">
+          <span id="listTitle">Ближайшие АЗС</span>
+          <span id="listCount" class="count">0</span>
+        </div>
+
+        <div id="stationList" class="station-list"></div>
+      </aside>
+
+      <!-- Карта -->
+      <main id="mapWrap">
+        <div id="map"></div>
+        <button id="locateBtn" title="Моё местоположение">📍</button>
+        <button id="notifyBtn" title="Уведомления об изменениях">🔔</button>
+      </main>
+    </div>
+
+    <!-- Баннер установки PWA -->
+    <div id="installBanner" class="hidden">
+      <span class="ib-text">📲 Установите «ГдеЗаправку» на телефон — работает как приложение</span>
+      <button class="ib-yes" id="installYes">Установить</button>
+      <button class="ib-no" id="installNo">Позже</button>
+    </div>
+
+    <!-- Панель деталей станции -->
+    <div id="detailPanel" class="detail-panel hidden">
+      <div class="detail-content" id="detailContent"></div>
+    </div>
+
+    <!-- Модалка "Отметить наличие" -->
+    <div id="reportModal" class="modal hidden">
+      <div class="modal-box">
+        <h3 id="reportTitle">Отметить наличие</h3>
+
+        <div class="field">
+          <label>Что с топливом сейчас?</label>
+          <div class="seg" id="statusSeg">
+            <button data-status="yes" class="seg-btn active">Есть</button>
+            <button data-status="limit" class="seg-btn">Лимит</button>
+            <button data-status="no" class="seg-btn">Нет</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Какие марки доступны?</label>
+          <div class="tags" id="fuelTags"></div>
+        </div>
+
+        <div class="field">
+          <label>Лимит на отпуск, л (если есть)</label>
+          <input type="number" id="limitInput" placeholder="например, 20" min="0" />
+        </div>
+
+        <div class="field">
+          <label>Очередь — необязательно</label>
+          <div class="tags" id="queueTags"></div>
+        </div>
+
+        <p class="hint">Спасибо! Ваша отметка поможет другим водителям. Регистрация не нужна.</p>
+
+        <div class="modal-actions">
+          <button id="reportSubmit" class="btn primary">Отправить</button>
+          <button id="reportCancel" class="btn ghost">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
