@@ -717,12 +717,20 @@ body {
   line-height: 1;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
-.maplibregl-marker {
+/* ВАЖНО: не трогаем transform самого .maplibregl-marker — MapLibre использует
+   его для позиционирования (translate). Любой transition/scale на нём приводит
+   к «съезжанию» иконок при скролле. Наведение и анимацию вешаем на внутренний
+   элемент маркера. */
+.maplibregl-marker .dot,
+.maplibregl-marker .cluster-donut {
   transition: transform 0.12s ease;
 }
 .maplibregl-marker:hover {
+  z-index: 1000;
+}
+.maplibregl-marker:hover .dot,
+.maplibregl-marker:hover .cluster-donut {
   transform: scale(1.12);
-  z-index: 1000 !important;
 }
 
 /* ================= PWA install banner ================= */

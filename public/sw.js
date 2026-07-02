@@ -3,7 +3,7 @@
 // - принимает и показывает push-уведомления
 'use strict';
 
-const CACHE = 'gz-shell-v4';
+const CACHE = 'gz-shell-v5';
 
 const SHELL = [
   '/',
